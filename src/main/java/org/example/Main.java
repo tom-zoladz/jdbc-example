@@ -1,6 +1,16 @@
 package org.example;
 
+import org.example.dao.DepartmentDao;
+import org.example.dao.WorkerDao;
+import org.example.model.DataInitializer;
+import org.example.model.Department;
+import org.example.model.Worker;
+import org.example.service.WorkerFullInfoService;
+import org.example.service.WorkerWithDepartment;
+
 import java.sql.*;
+import java.time.LocalDate;
+import java.util.Optional;
 
 public class Main {
     public static void main(String[] args) {
@@ -9,45 +19,68 @@ public class Main {
         // Connection and DriverManager are part of java.sql package
         // In order to make it work we need to add mysql-connector-java dependency in the pom file
 
-        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/jdbc", "root", "sqlkurs") ) {
-
-            // DB operations
-
-            // To make below "insert" work we need to drop the table and create it again
-            Statement statement = connection.createStatement();
-            statement.execute("DROP TABLE department");
-
-            String createDepartmentQuery = """
-                    CREATE TABLE IF NOT EXISTS department (
-                        department_id INT PRIMARY KEY,
-                        department_name VARCHAR(50)
-                    );
-                    """;
-            statement.execute(createDepartmentQuery);
+        try (final Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/jdbc", "root", "sqlkurs") ) {
 
 
-            // In order to parametrize a query, we need to use PreparedStatement
-            String insertDepartmentQuery = """
-                    INSERT INTO department (department_id, department_name)
-                    VALUES(?, ?);
-                    """;
-            PreparedStatement insertDepartment = connection.prepareStatement(insertDepartmentQuery);
-            insertDepartment.setInt(1,1); // indexing from 1 unfortunately
-            insertDepartment.setString(2, "Ministry of Magic");
-            insertDepartment.executeUpdate();
+            DataInitializer dataInitializer = new DataInitializer(connection);
+            dataInitializer.initData();
 
-            // Read the table content
-            String getAllDepartmentsQuery = "SELECT * FROM department";
-            Statement getAllDepartmentsStatement = connection.createStatement();
 
-            ResultSet resultSet = getAllDepartmentsStatement.executeQuery(getAllDepartmentsQuery);
+            // CREATE (save)
+            DepartmentDao departmentDao = new DepartmentDao(connection);
+            departmentDao.save(new Department(1, "Ministry of Magic"));
+            departmentDao.save(new Department(2, "Ministry of Mysteries"));
 
-            while (resultSet.next()) {
-                int id = resultSet.getInt(1);
-                String name = resultSet.getString(2);
-                System.out.println("Department " + name + " with id " + id);
+            // RETRIEVE (get)
+            System.out.println(departmentDao.getAll());
+
+            Optional<Department> optional = departmentDao.getById(1);
+            if (optional.isPresent()) {
+                System.out.println(optional.get().getDepartmentName());
+            }
+            else System.out.println("No elements for such requirements");
+
+            // UPDATE
+            departmentDao.update(new Department(1, "Ministry of Magic new"));
+
+            if (departmentDao.getById(1).isPresent()) {
+                System.out.println(departmentDao.getById(1).get().getDepartmentName());
             }
 
+            // REMOVE
+            departmentDao.removeById(1);
+            System.out.println(departmentDao.getAll());
+
+            departmentDao.save(new Department(1, "Ministry of Magic")); // back to the previous state
+
+            // table worker
+            // CREATE (save)
+            WorkerDao workerDao = new WorkerDao(connection);
+            workerDao.save(new Worker(1, "Tom", "Zoladz", LocalDate.of(2022,1,1),1));
+            workerDao.save(new Worker(2, "Ann", "Szpak", LocalDate.of(2022,5,1),1));
+            workerDao.save(new Worker(3, "Tom", "Krajc", LocalDate.of(2023,1,1),2));
+            workerDao.save(new Worker(4, "Anna", "Zol", LocalDate.of(2023,4,1),2));
+
+            // RETRIEVE (get)
+            System.out.println(workerDao.getAll());
+            if (workerDao.getById(3).isPresent())
+            {
+                System.out.println(workerDao.getById(3).get());
+            }
+            if (workerDao.getById(6).isPresent()) {
+                System.out.println(workerDao.getById(6).get());
+            }
+
+            // UPDATE
+            workerDao.update(new Worker(4, "Aneczka", "Zoledziowa", LocalDate.of(2023, 4, 1), 2));
+
+            // REMOVE
+            workerDao.removeById(1);
+            workerDao.getAll().stream().forEach(System.out::println);
+
+            // WORKERFULLINFOSERVICE
+            WorkerFullInfoService workerFullInfoService = new WorkerFullInfoService(workerDao, departmentDao);
+            System.out.println(workerFullInfoService.presentFullWorkerDataById(2));
 
 
             // Closing connection
